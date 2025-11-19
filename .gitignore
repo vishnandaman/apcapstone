@@ -4,3 +4,6 @@ __pycache__/
 *.pyo
 *.h5
 *.pkl
+
+# Firebase configuration (contains sensitive API keys)
+firebase-config.js

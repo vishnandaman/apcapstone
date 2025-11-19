@@ -13,19 +13,44 @@ if not os.path.exists(model_path):
 model = tf.keras.models.load_model(model_path, compile=False)
 model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
 
-# ✅ Load Label Encoder
+# ✅ Load Label Encoder (optional - will use hardcoded mapping if not found)
+label_encoder = None
 label_encoder_path = "label_encoder.pkl"
-if not os.path.exists(label_encoder_path):
-    raise FileNotFoundError(f"❌ Label Encoder file '{label_encoder_path}' not found! Please re-save it.")
 
-with open(label_encoder_path, "rb") as le_file:
-    label_encoder = pickle.load(le_file)  # Load previously saved LabelEncoder
+# Hardcoded stress level mapping (class index -> stress level name)
+# This matches the frontend expectations: Normal, Mild, Moderate, High, Severe
+STRESS_LEVEL_MAPPING = {
+    0: 'Normal',
+    1: 'Mild',
+    2: 'Moderate',
+    3: 'High',
+    4: 'Severe'
+}
+
+if os.path.exists(label_encoder_path):
+    try:
+        with open(label_encoder_path, "rb") as le_file:
+            label_encoder = pickle.load(le_file)
+        print("✅ Label encoder loaded successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load label encoder: {e}. Using hardcoded mapping.")
+        label_encoder = None
+else:
+    print("⚠️ Label encoder file not found. Using hardcoded stress level mapping.")
 
 app = Flask(__name__)
 CORS(app)
 
 # ✅ Set the correct input shape for prediction
-INPUT_SHAPE = model.input_shape[1]  # Extract from model
+try:
+    if model.input_shape is None or len(model.input_shape) < 2:
+        raise ValueError("Model input shape is invalid")
+    INPUT_SHAPE = model.input_shape[1]  # Extract from model
+    if INPUT_SHAPE < 5:
+        raise ValueError(f"Input shape ({INPUT_SHAPE}) must be at least 5")
+except Exception as e:
+    print(f"Error setting INPUT_SHAPE: {e}")
+    INPUT_SHAPE = 5  # Default fallback
 
 # Home route to serve the index.html file
 @app.route("/")
@@ -38,6 +63,15 @@ def predict():
     try:
         data = request.get_json()
         
+        if not data:
+            return jsonify({"error": "No data provided"})
+        
+        # Validate required fields
+        required_fields = ['beta', 'gamma', 'delta', 'alpha', 'theta']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"})
+        
         beta = float(data['beta'])
         gamma = float(data['gamma'])
         delta = float(data['delta'])
@@ -45,20 +79,50 @@ def predict():
         theta = float(data['theta'])
 
         # ✅ Ensure input matches the expected shape
-        input_eeg = [beta, gamma, delta, alpha, theta] + [0] * (INPUT_SHAPE - 5)  
+        padding_size = max(0, INPUT_SHAPE - 5)  # Ensure non-negative
+        input_eeg = [beta, gamma, delta, alpha, theta] + [0] * padding_size
+        
+        if len(input_eeg) != INPUT_SHAPE:
+            return jsonify({"error": f"Input size mismatch: expected {INPUT_SHAPE}, got {len(input_eeg)}"})
+        
         input_data = np.array([input_eeg]).reshape((1, INPUT_SHAPE, 1))
 
         # ✅ Make prediction
-        prediction = model.predict(input_data)
-        predicted_class = np.argmax(prediction)
+        prediction = model.predict(input_data, verbose=0)
+        predicted_class = int(np.argmax(prediction))
+        
+        # Validate predicted class
+        if predicted_class < 0:
+            return jsonify({"error": f"Invalid predicted class: {predicted_class}"})
 
-        # ✅ Convert predicted class to disorder name
-        predicted_disorder = label_encoder.inverse_transform([predicted_class])[0]
+        # ✅ Convert predicted class to stress level name
+        if label_encoder is not None:
+            # Use label encoder if available
+            try:
+                inverse_result = label_encoder.inverse_transform([predicted_class])
+                if len(inverse_result) == 0:
+                    return jsonify({"error": "Label encoder returned empty result"})
+                predicted_stress_level = inverse_result[0]
+            except (ValueError, IndexError) as e:
+                print(f"Label encoder error: {e}. Falling back to hardcoded mapping.")
+                # Fallback to hardcoded mapping
+                predicted_stress_level = STRESS_LEVEL_MAPPING.get(predicted_class, 'Moderate')
+        else:
+            # Use hardcoded mapping
+            predicted_stress_level = STRESS_LEVEL_MAPPING.get(predicted_class, 'Moderate')
+        
+        # Validate the predicted stress level
+        if predicted_stress_level not in STRESS_LEVEL_MAPPING.values():
+            return jsonify({"error": f"Invalid stress level: {predicted_stress_level}. Predicted class: {predicted_class}"})
 
-        return jsonify({"prediction": predicted_disorder})
+        return jsonify({"prediction": predicted_stress_level})
 
+    except KeyError as e:
+        return jsonify({"error": f"Missing required field: {str(e)}"})
+    except ValueError as e:
+        return jsonify({"error": f"Invalid input value: {str(e)}"})
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": f"Prediction error: {str(e)}"})
 
 if __name__ == "__main__":
     app.run(debug=True)

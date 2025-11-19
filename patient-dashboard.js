@@ -122,10 +122,19 @@ function displayProgressSummary(userData) {
         
         // Calculate improvement (comparing first and last entries)
         if (userData.stressHistory.length > 1) {
-            const first = userData.stressHistory[0].level || 3;
-            const last = userData.stressHistory[userData.stressHistory.length - 1].level || 3;
-            const improvement = ((first - last) / first) * 100;
-            document.getElementById('improvement-rate').textContent = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+            const firstEntry = userData.stressHistory[0];
+            const lastEntry = userData.stressHistory[userData.stressHistory.length - 1];
+            
+            // Safe access with null checks
+            const first = (firstEntry && firstEntry.level) ? firstEntry.level : 3;
+            const last = (lastEntry && lastEntry.level) ? lastEntry.level : 3;
+            
+            if (first > 0) {
+                const improvement = ((first - last) / first) * 100;
+                document.getElementById('improvement-rate').textContent = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+            } else {
+                document.getElementById('improvement-rate').textContent = 'N/A';
+            }
         }
     }
 }

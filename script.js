@@ -1,15 +1,7 @@
 // Firebase Configuration
-// TODO: Replace with your Firebase project configuration
+// Configuration is loaded from firebase-config.js (not committed to repo)
+// Make sure firebase-config.js exists with your Firebase project credentials
 // Get your config from: https://console.firebase.google.com/ > Project Settings > General > Your apps
-const firebaseConfig = {
-    apiKey: "AIzaSyD24pVQfAdnLizfcDt7WMi_YHG8cfEweGU",
-    authDomain: "vrcapstonrit213123.firebaseapp.com",
-    projectId: "vrcapstonrit213123",
-    storageBucket: "vrcapstonrit213123.firebasestorage.app",
-    messagingSenderId: "560615276492",
-    appId: "1:560615276492:web:4b44fe0a89cbb05afa2769",
-    measurementId: "G-M22TYYTYB0"
-}
 
 // Initialize Firebase only if config is valid and Firebase SDK is loaded
 let auth, db;
@@ -29,9 +21,10 @@ function initializeFirebase() {
         return;
     }
     
-    // Check if config is valid
-    if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.warn('Firebase not configured. Please update firebaseConfig in script.js with your Firebase project credentials.');
+    // Check if config is loaded from firebase-config.js
+    if (typeof firebaseConfig === 'undefined' || !firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+        console.error('Firebase not configured. Please create firebase-config.js with your Firebase project credentials.');
+        console.error('Example: Create firebase-config.js with: const firebaseConfig = { apiKey: "...", authDomain: "...", ... }');
         return;
     }
     
@@ -330,7 +323,7 @@ async function handleAuth() {
     }
 
     if (typeof auth === 'undefined' || !auth) {
-        showAuthError('Firebase not configured. Please update firebaseConfig in script.js with your Firebase credentials.');
+        showAuthError('Firebase not configured. Please create firebase-config.js with your Firebase credentials.');
         return;
     }
 
